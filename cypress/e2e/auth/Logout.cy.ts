@@ -1,7 +1,7 @@
 describe('Logout', () => {
   it('should logout correctly', () => {
     // login with the creds
-    cy.login();
+    cy.login('Admin');
     // click the profile icon on top right
     cy.get('[alt="profile icon"]').click();
     // select the logout item and click

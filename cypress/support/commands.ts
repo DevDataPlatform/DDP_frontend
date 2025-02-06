@@ -1,7 +1,7 @@
 /// <reference types="cypress" />
 declare namespace Cypress {
   interface Chainable<Subject = any> {
-    login(): Chainable<any>;
+    login(role): Chainable<string>;
   }
 }
 
@@ -41,10 +41,21 @@ declare namespace Cypress {
 //     }
 //   }
 // }
-Cypress.Commands.add('login', () => {
-  cy.visit('/login');
-  cy.get('[data-testid="username"]').type(Cypress.env('username'));
-  cy.get('[data-testid="password"]').type(Cypress.env('password'));
+Cypress.Commands.add('login', (role) => {
+  const Role = {
+    Admin: {
+      email: Cypress.env('admin_username'),
+      password: Cypress.env('admin_password'),
+    },
+    Pipeline_Manager: {
+      email: Cypress.env('pipeline_manager_username'),
+      password: Cypress.env('pipeline_manager_password'),
+    },
+  };
+  const currentRole = Role[role];
+  cy.visit('https://staging.dalgo.in/login');
+  cy.get('[data-testid="username"]').type(currentRole.email);
+  cy.get('[data-testid="password"]').type(currentRole.password);
   cy.get('[data-testid="submitbutton"]').click();
   cy.get('div').should('contain', 'User logged in successfully');
 });

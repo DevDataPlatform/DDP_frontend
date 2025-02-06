@@ -1,14 +1,18 @@
 describe('Add source', () => {
   beforeEach(() => {
-    cy.login();
-    cy.intercept('/api/dashboard').as('dashboard');
+    cy.login('Admin');
+    cy.intercept('/api/dashboard/v1').as('dashboard');
     cy.wait(['@dashboard']);
   });
 
   it('Add source', () => {
-    cy.get('[data-testid="side-menu"]').contains('Ingest').click();
-    cy.get('[data-testid="side-menu"]').contains('Ingest').click();
-    cy.get('h4').should('contain', 'Ingest');
+    cy.get('[data-testid="side-menu"]')
+      .find('li')
+      .eq(1)
+      .within(() => {
+        cy.get('[data-testid="listButton"]').find('button').click();
+      });
+    cy.get('[data-testid="menu-item-1.1"]').click();
 
     // three tabs should be visible
     cy.intercept('/api/airbyte/sources').as('sources');
@@ -25,17 +29,14 @@ describe('Add source', () => {
     // create source
     cy.get('[data-testid="add-new-source"]').click();
 
-    cy.get('[data-testid="create-source-dialog"]')
-      .contains('label', 'Select source type')
-      .parent()
-      .find('input')
-      .type('Kobotoolbox');
+    // cy.get('[data-testid="create-source-dialog"]')
+    cy.contains('label', 'Select source type').parent().find('input').type('Dockerhub (v0.2.0)');
 
-    cy.get('[data-testid="create-source-dialog"]')
-      .contains('label', 'Select source type')
+    // cy.get('[data-testid="create-source-dialog"]')
+    cy.contains('label', 'Select source type')
       .parent()
       .get('.MuiAutocomplete-listbox li')
-      .contains('Kobotoolbox')
+      .contains('Dockerhub (v0.2.0)')
       .invoke('show') // Trigger the 'show' event on the option
       .click();
 
@@ -93,33 +94,22 @@ describe('Add source', () => {
     //   .find('input')
     //   .type('cypress_test_source');
 
-    cy.get('[data-testid="create-source-dialog"]')
-      .contains('label', 'Username')
-      .parent()
-      .find('input')
-      .type(Cypress.env('SRC_KOBO_USERNAME'));
+    // cy.get('[data-testid="create-source-dialog"]')
+    cy.contains('label', 'Docker Username').parent().find('input').type('himanshudube97');
 
-    cy.get('[data-testid="create-source-dialog"]')
-      .contains('label', 'Password')
-      .parent()
-      .find('input')
-      .type(Cypress.env('SRC_KOBO_PASSWORD'));
+    // // cy.get('[data-testid="create-source-dialog"]')
+    // cy.contains('label', 'Password').parent().find('input').type(Cypress.env('SRC_KOBO_PASSWORD'));
 
-    cy.get('[data-testid="create-source-dialog"]')
-      .contains('label', 'Base Url')
-      .parent()
-      .find('input')
-      .type(Cypress.env('SRC_KOBO_BASE_URL'));
+    // // cy.get('[data-testid="create-source-dialog"]')
+    // cy.contains('label', 'Base Url').parent().find('input').type(Cypress.env('SRC_KOBO_BASE_URL'));
 
-    cy.get('[data-testid="create-source-dialog"]')
-      .contains('label', 'Name')
-      .parent()
-      .find('input')
-      .type('cypress test src');
+    // cy.get('[data-testid="create-source-dialog"]')
+    cy.contains('label', 'Name').parent().find('input').type('cypress test src');
 
     cy.get('[data-testid="savebutton"]').click();
 
-    cy.intercept('/api/airbyte/sources/check_connection').as('check_connection');
+    cy.intercept('/api/airbyte/sources/').as('create_source');
+    cy.wait(10000);
 
     cy.contains('td', 'cypress test src');
   });
