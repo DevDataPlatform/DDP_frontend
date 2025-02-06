@@ -366,11 +366,15 @@ export const StatisticsPane: React.FC<StatisticsPaneProps> = ({ height }) => {
   };
 
   const fetchRowCountAndColumns = async (schema: string, table: string) => {
-    const count = await httpGet(session, `warehouse/table_count/${schema}/${table}`);
-    setRowCount(count.total_rows);
+    try {
+      const count = await httpGet(session, `warehouse/table_count/${schema}/${table}`);
+      setRowCount(count.total_rows);
 
-    if (count.total_rows > 0) {
-      fetchColumns(schema, table);
+      if (count.total_rows > 0) {
+        fetchColumns(schema, table);
+      }
+    } catch (error: any) {
+      errorToast(error.message, [], toastContext);
     }
   };
 

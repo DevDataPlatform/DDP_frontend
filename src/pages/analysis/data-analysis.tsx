@@ -297,12 +297,13 @@ export default function DataAnalysis() {
         (oldSessionMetaInfo.oldSessionId && newSessionId && state === false) ||
         (newSessionId && !oldSessionMetaInfo.oldSessionId && state === false)
       ) {
+        // Emit a routeChangeError to prevent the navigation
         router.events.emit('routeChangeError');
         setModalName(MODALS.UNSAVED_CHANGES);
         setIsBoxOpen(true);
         dispatch({ type: 'SET_UNSAVED_CHANGES' });
         setAttemptedRoute(url);
-        throw 'Unsaved changes, route change aborted';
+        return false;
       }
     };
 

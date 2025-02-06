@@ -52,9 +52,9 @@ const AcceptInvite = () => {
         router.push('/login');
         successToast('Invitation successfully accepted', [], globalContext);
       } catch (err: any) {
-        if (err.cause.detail === 'password is required') setIsUserPresent(false);
+        if (err?.cause?.detail === 'password is required') setIsUserPresent(false);
         else {
-          errorToast(err.cause.detail, [], globalContext);
+          errorToast(err?.cause?.detail, [], globalContext);
         }
       }
       setLoading(false);
