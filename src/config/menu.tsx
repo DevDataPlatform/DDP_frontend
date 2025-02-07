@@ -31,7 +31,7 @@ export const getSideMenu = () => {
       icon: (selected: boolean) => <AnalysisIcon fill={getColor(selected)} />,
       className: 'analysis_walkthrough',
       minimize: false,
-      hide: !showSupersetAnalysisTab,
+      // hide: !showSupersetAnalysisTab,
     },
     {
       index: 0.1,
@@ -41,7 +41,7 @@ export const getSideMenu = () => {
       parent: 0,
       className: 'usage_walkthrough',
       minimize: false,
-      hide: !showSupersetUsageTab,
+      // hide: !showSupersetUsageTab,
     },
     {
       index: 0.2,
@@ -51,7 +51,7 @@ export const getSideMenu = () => {
       parent: 0,
       className: 'data_analysis',
       minimize: false,
-      hide: !showDataAnalysisTab,
+      // hide: !showDataAnalysisTab,
     },
     {
       index: 1,

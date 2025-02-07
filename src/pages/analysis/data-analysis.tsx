@@ -1,448 +1,223 @@
-import { Backdrop, Box, CircularProgress, Typography } from '@mui/material';
-import { LLMSummary } from '@/components/DataAnalysis/LLMSummary';
-import { SqlWrite } from '@/components/DataAnalysis/SqlWrite';
-import { httpGet, httpPost } from '@/helpers/http';
-import { useSession } from 'next-auth/react';
-import { delay } from '@/utils/common';
-import { GlobalContext } from '@/contexts/ContextProvider';
-import { errorToast, successToast } from '@/components/ToastMessage/ToastHelper';
-import { useContext, useEffect, useState } from 'react';
-import { SavedSession } from '@/components/DataAnalysis/SavedSession';
-import { TopBar } from '@/components/DataAnalysis/TopBar';
-import { jsonToCSV } from 'react-papaparse';
 import { PageHead } from '@/components/PageHead';
-import { Disclaimer } from '@/components/DataAnalysis/Disclaimer';
-import { OverWriteDialog } from '@/components/DataAnalysis/OverwriteBox';
+
+import { Box, Dialog, Divider, Typography } from '@mui/material';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
-import { DeactivatedMsg } from '@/components/DataAnalysis/DeactivatedMsg';
-interface ProgressResult {
-  response?: Array<any>;
-  session_id?: string;
-}
+import { useContext, useEffect, useRef, useState } from 'react';
+import { TopNavBar, Transition } from '@/components/DBT/DBTTransformType';
+import { ResizableBox } from 'react-resizable';
+import { GlobalContext } from '@/contexts/ContextProvider';
+import { errorToast } from '@/components/ToastMessage/ToastHelper';
+import { GenerateSql } from '@/components/DataAnalysis/chat_with_your_data/GenerateSql';
+import { useForm } from 'react-hook-form';
+import {
+  ChatInterface,
+  ChatMessage,
+} from '@/components/DataAnalysis/chat_with_your_data/ChatInterface';
 
-interface ProgressEntry {
-  message: string;
-  status: 'running' | 'completed' | 'failed';
-  result?: ProgressResult;
-}
+import useWebSocket from 'react-use-websocket';
+import { generateWebsocketUrl } from '@/helpers/websocket';
+import { Thread, Threads } from '@/components/DataAnalysis/chat_with_your_data/Threads';
+import { PreviewPaneSql } from '@/components/DataAnalysis/chat_with_your_data/PreviewTable';
 
-interface UserPreferences {
-  enable_email_notifications: boolean;
-  disclaimer_shown: boolean;
-  is_llm_active: boolean;
-  enable_llm_requested: boolean;
-}
-export const MODALS = {
-  SAVE: 'SAVE',
-  OVERWRITE: 'OVERWRITE',
-  CONFIRM_SAVEAS: 'CONFIRM_SAVEAS',
-  FEEDBACK_FORM: 'FEEDBACK_FORM',
-  UNSAVED_CHANGES: 'UNSAVED_CHANGES',
-  RESET_WARNING: 'RESET_WARNING',
-  EDIT_SESSION_WARNING: 'EDIT_SESSION_WARNING',
-};
-
-interface ProgressResponse {
-  progress: ProgressEntry[];
-}
-export default function DataAnalysis() {
+export default function Explore() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [attemptedRoute, setAttemptedRoute] = useState(null);
   const globalContext = useContext(GlobalContext);
-  const { dispatch, state } = globalContext?.UnsavedChanges ?? {};
   const [loading, setLoading] = useState(false);
-  const [openSavedSessionDialog, setOpenSavedSessionDialog] = useState(false);
-  const [resetState, setResetState] = useState(true);
-  const [openDisclaimer, setOpenDisclaimer] = useState(false);
-  const [openDeactivateMsg, setOpenDeactivateMsg] = useState(false);
-  const [selectedSession, setSelectedSession] = useState();
-  const [isBoxOpen, setIsBoxOpen] = useState(false);
-  const [modalName, setModalName] = useState(MODALS.SAVE);
-  const [userpreferences, setUserPreferences] = useState<UserPreferences | any>(null);
-  //for the discalimer page.
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [currentThread, setCurrentThread] = useState<Thread | null>(null);
+  const refreshThreads = useRef<boolean>(false); // just a toggle to refetch threads list
+
+  const [dialogueOpen, setDialogueOpen] = useState(true);
+  const [width, setWidth] = useState(400);
+  const [width_R, setWidth_R] = useState(400);
+
+  const [height, setheight] = useState(500);
+  const [height_R, setheight_R] = useState(500);
+
+  // const onResize = (event: any, { size }: any) => {
+  //   setWidth(size.width);
+  // };
+  // const onResize_R = (event: any, { size }: any) => {
+  //   setWidth_R(size.width);
+  // };
+
+  const setRefreshThreads = (value: boolean) => {
+    refreshThreads.current = !refreshThreads.current;
+  };
+
+  const { setValue, watch } = useForm({
+    defaultValues: {
+      aiGeneratedSql: '',
+      userPrompt: '',
+      tableData: [],
+    },
+  });
+
+  const aiGeneratedSql = watch('aiGeneratedSql');
+  const tableData = watch('tableData');
+  const userPrompt = watch('userPrompt');
+
+  const [socketUrl, setSocketUrl] = useState<string | null>(null);
+  const {
+    sendJsonMessage,
+    lastJsonMessage,
+  }: {
+    sendJsonMessage: (...args: any) => any;
+    lastJsonMessage: { data: any; status: string; message: string } | null;
+  } = useWebSocket(socketUrl, {
+    share: true,
+    onError(event) {
+      console.error('Socket error:', event);
+    },
+  });
+
   useEffect(() => {
-    const orgSlug = localStorage.getItem('org-slug');
-    try {
-      if (orgSlug && session?.user?.email) {
-        (async () => {
-          const { success, res } = await httpGet(session, `userpreferences/`);
-          if (success) {
-            setUserPreferences(res);
-            if (!res.is_llm_active) {
-              setOpenDeactivateMsg(true);
-              return;
-            }
-            if (!res.disclaimer_shown) {
-              setOpenDisclaimer(true);
-              return;
-            }
-          }
-        })();
-      }
-    } catch (error: any) {
-      errorToast(error.message, [], globalContext);
-      console.error(error, 'error');
+    if (session) {
+      setSocketUrl(generateWebsocketUrl('chat/bot', session));
     }
   }, [session]);
 
-  const [{ prompt, summary, newSessionId, ...oldSessionMetaInfo }, setSessionMetaInfo] = useState({
-    prompt: '',
-    summary: '',
-    newSessionId: '',
-    session_status: '',
-    sqlText: '',
-    taskId: '',
-    session_name: '',
-    oldSessionId: '',
-  });
-  const handleCloseSavedSession = () => {
-    setOpenSavedSessionDialog(false);
-  };
-  const handleOpenSavedSession = () => {
-    setOpenSavedSessionDialog(true);
-  };
-  const handleNewSession = (shouldRefreshState: boolean | undefined) => {
-    //should refreshstate is when the save or overwrite api works.
-    // !newSessionId is for the case when a old session is opened so it has only oldsessionId.
-    if (shouldRefreshState || !newSessionId) {
-      setSessionMetaInfo({
-        prompt: '',
-        summary: '',
-        newSessionId: '',
-        session_status: '',
-        sqlText: '',
-        taskId: '',
-        session_name: '',
-        oldSessionId: '',
-      });
-    }
-    setResetState(true);
-  };
-  const handleEditSession = (info: any, openEdit: boolean) => {
-    setSelectedSession(info);
-    //shows me a modal asking to save the generated summary.
-    if (newSessionId && !openEdit) {
-      setIsBoxOpen(true);
-      setModalName(MODALS.EDIT_SESSION_WARNING);
-      return;
-    }
-    setSessionMetaInfo({
-      newSessionId: '',
-      ...oldSessionMetaInfo,
-      ...info,
-    });
-  };
-  const downloadCSV = () => {
-    const csv = jsonToCSV([
-      {
-        session_name: oldSessionMetaInfo.session_name || null,
-        sqlText: oldSessionMetaInfo.sqlText || null,
-        prompt,
-        summary,
-        session_status: oldSessionMetaInfo.session_status || null,
-        taskId: oldSessionMetaInfo.taskId || null,
-        newSessionId: newSessionId || null,
-        oldSessionId: oldSessionMetaInfo.oldSessionId || null,
-      },
-    ]);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'summary.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  //polling
-  const pollForTaskRun = async (taskId: string) => {
-    try {
-      const response: ProgressResponse = await httpGet(session, 'tasks/stp/' + taskId);
-      const lastMessage: any =
-        response['progress'] && response['progress'].length > 0
-          ? response['progress'][response['progress'].length - 1]
-          : null;
-
-      if (!['completed', 'failed'].includes(lastMessage?.status)) {
-        await delay(3000);
-        await pollForTaskRun(taskId);
-      } else if (lastMessage?.status === 'failed') {
-        errorToast(lastMessage?.message, [], globalContext);
-        return;
-      } else if (lastMessage?.status === 'completed') {
-        successToast(lastMessage?.message, [], globalContext);
-
-        setSessionMetaInfo((prev) => {
-          return {
-            ...prev,
-            summary: lastMessage?.result?.response?.[0]?.response || 'No summary available',
-            newSessionId: lastMessage?.result?.session_id || prev.newSessionId,
-          };
-        });
-      }
-    } catch (err: any) {
-      console.error(err);
-      errorToast(err.message, [], globalContext);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // get llm summary
-  const getLLMSummary = async ({
-    sqlText,
-    user_prompt,
-  }: {
-    sqlText: string;
-    user_prompt: string;
-  }) => {
-    setLoading(true);
-    try {
-      const response: { request_uuid: string } = await httpPost(session, `warehouse/ask/`, {
-        sql: sqlText,
-        user_prompt,
-      });
-      if (!response?.request_uuid) {
-        errorToast('Something went wrong', [], globalContext);
-        return { error: 'ERROR' };
-      }
-      setSessionMetaInfo((prev) => {
-        return {
-          ...prev,
-          sqlText,
-          prompt: user_prompt,
-          taskId: response.request_uuid,
-        };
-      });
-      successToast(`Data analysis initiated successfully`, [], globalContext);
-      await delay(3000);
-      pollForTaskRun(response.request_uuid);
-    } catch (err: any) {
-      console.error(err);
-      setLoading(false);
-      errorToast(err.message, [], globalContext);
-    }
-  };
-  //handling save session->
-  const handleSaveSession = async (
-    overwrite: boolean,
-    old_session_id: string | null,
-    session_name: string
-  ) => {
-    try {
-      const response: { success: number } = await httpPost(
-        session,
-        `warehouse/ask/${newSessionId}/save`,
-        {
-          session_name,
-          overwrite,
-          old_session_id,
-        }
-      );
-      if (response.success) {
-        successToast(`${session_name} saved successfully`, [], globalContext);
-        handleNewSession(true);
-      }
-    } catch (err: any) {
-      errorToast(err.message, [], globalContext);
-    } finally {
-      setIsBoxOpen(false);
-    }
-  };
-
-  const handleFeedback = async (session_id: string, feedback: string) => {
-    try {
-      const response: { success: number } = await httpPost(
-        session,
-        `warehouse/ask/${session_id}/feedback`,
-        {
-          feedback,
-        }
-      );
-      if (response.success) {
-        successToast(`Feedback sent successfully`, [], globalContext);
-      }
-    } catch (err: any) {
-      errorToast(err.message, [], globalContext);
-    } finally {
-      setIsBoxOpen(false);
-    }
-  };
-
-  // Submitting the session name -> Caan be overwrite or new session.
-  const onSubmit = (sessionName: string, overwrite: boolean) => {
-    const oldSessionIdToSend = overwrite ? oldSessionMetaInfo?.oldSessionId : null;
-    handleSaveSession(overwrite, oldSessionIdToSend, sessionName);
-  };
-
-  //Submitting Feedback
-  const submitFeedback = (feedback: string) => {
-    let sessionIdToSend: any;
-    if (newSessionId) {
-      // if we have a newsession or if we have oldsession but again create a new summary (both oldsessionid and newsessionid).
-      sessionIdToSend = newSessionId;
-    } else if (oldSessionMetaInfo.oldSessionId) {
-      //during edit when we have a oldsession id.
-      sessionIdToSend = oldSessionMetaInfo.oldSessionId;
-    }
-    handleFeedback(sessionIdToSend, feedback);
-  };
-
-  //Warns user to save the session before moving to some other tab.
   useEffect(() => {
-    const handleRouteChange = (url: any) => {
-      if (
-        (oldSessionMetaInfo.oldSessionId && newSessionId && state === false) ||
-        (newSessionId && !oldSessionMetaInfo.oldSessionId && state === false)
-      ) {
-        router.events.emit('routeChangeError');
-        setModalName(MODALS.UNSAVED_CHANGES);
-        setIsBoxOpen(true);
-        dispatch({ type: 'SET_UNSAVED_CHANGES' });
-        setAttemptedRoute(url);
-        throw 'Unsaved changes, route change aborted';
-      }
-    };
+    const dialogBox = document.querySelector('.MuiDialog-container');
 
-    router.events.on('routeChangeStart', handleRouteChange);
-
-    return () => {
-      router.events.off('routeChangeStart', handleRouteChange);
-      dispatch({ type: 'CLEAR_UNSAVED_CHANGES' });
-    };
-  }, [router, oldSessionMetaInfo.oldSessionId, state, newSessionId]);
-
-  //the unsaved modal function->
-  const onConfirmNavigation = () => {
-    if (attemptedRoute) {
-      dispatch({ type: 'SET_UNSAVED_CHANGES' });
-      router.push(attemptedRoute);
+    if (dialogBox) {
+      const fullHeight = dialogBox?.clientHeight - 100;
+      setheight(fullHeight);
     }
+  }, []);
+
+  useEffect(() => {
+    if (currentThread) {
+      console.log(currentThread, 'currentThread');
+      setValue('aiGeneratedSql', currentThread.meta.sql);
+      setValue('userPrompt', currentThread.meta.user_prompt);
+    } else {
+      setValue('aiGeneratedSql', '');
+      setValue('userPrompt', '');
+    }
+  }, [currentThread]);
+
+  const triggerRefreshThreads = async () => {
+    // refersh the threads list
+    // sendJsonMessage({ action: 'get_threads' });
+    console.log('In main refreshing threads function');
+    setRefreshThreads(!refreshThreads);
   };
 
   return (
     <>
-      <PageHead title="Dalgo | LLM Analysis" />
-      <Box
-        sx={{
-          p: '3rem 3rem',
-          width: '100%',
-          display: 'flex',
-          gap: '1rem',
-        }}
-      >
+      <PageHead title="Dalgo | Data Analysis" />
+      <Dialog fullScreen open={dialogueOpen} TransitionComponent={Transition}>
+        <TopNavBar
+          handleClose={() => {
+            setDialogueOpen(false);
+            router.push('/pipeline/ingest');
+          }}
+        />
         <Box
           sx={{
-            ...customCss,
-            width: '45%',
-            flexDirection: 'column',
+            flexGrow: 1,
+            display: 'flex',
+            overflow: 'inherit',
+            position: 'relative',
+            height: '80vh',
           }}
         >
-          {/* Top saved Session Option */}
-          <TopBar
-            handleOpenSavedSession={handleOpenSavedSession}
-            handleNewSession={handleNewSession}
-          />
+          {/* LEFT SIDE TO VIEW THE THREADS */}
+          {/* <ResizableBox
+            axis="x"
+            width={width_R}
+            onResize={onResize_R}
+            minConstraints={[280, Infinity]}
+            maxConstraints={[550, Infinity]}
+            resizeHandles={['e']}
+          > */}
+          <Box style={{ width: '30vw' }}>
+            {' '}
+            {/* Ensure scrollable content */}
+            <Threads
+              threads={threads}
+              setThreads={setThreads}
+              setChatMessages={setChatMessages}
+              setCurrentThread={setCurrentThread}
+              currentThread={currentThread}
+            />
+          </Box>
+          {/* </ResizableBox> */}
 
-          {/* SQL write Area */}
-          <SqlWrite
-            getLLMSummary={getLLMSummary}
-            resetState={resetState}
-            setResetState={setResetState}
-            prompt={prompt}
-            newSessionId={newSessionId}
-            oldSessionMetaInfo={oldSessionMetaInfo}
-          />
+          <Divider orientation="vertical" sx={{ color: 'black' }} />
+          {/* Chat with your data. */}
+
+          <Box sx={{ width: `calc(100% - ${width}px)` }}>
+            <Box>
+              <Box sx={{ height: 'unset' }}>
+                <ChatInterface
+                  chatMessages={chatMessages}
+                  currentThread={currentThread}
+                  aiGeneratedSql={aiGeneratedSql}
+                  setChatMessages={setChatMessages}
+                />
+              </Box>
+            </Box>
+          </Box>
+          {/* Chat with your data. */}
+          <Divider orientation="vertical" sx={{ color: 'black' }} />
+          {/* <ResizableBox axis="x"
+            width={width}
+            onResize={onResize}
+            minConstraints={[280, Infinity]}
+            maxConstraints={[550, Infinity]}
+            resizeHandles={['w']}> */}
+
+          {/* <Accordion>
+              <AccordionSummary
+                expandIcon={<ExpandMore />}
+                aria-controls="panel1-content"
+                id="panel1-header"
+              >
+              </AccordionSummary>
+              <AccordionDetails>
+              </AccordionDetails>
+            </Accordion> */}
+          <Box sx={{ width: '30vw' }}>
+            <GenerateSql
+              aiGeneratedSql={aiGeneratedSql}
+              userPrompt={userPrompt}
+              triggerRefreshThreads={triggerRefreshThreads}
+              setThreads={setThreads}
+              setCurrentThread={setCurrentThread}
+            />
+          </Box>
+          {/* </ResizableBox> */}
         </Box>
 
-        {/* Final Summary */}
-        <LLMSummary
-          resetState={resetState}
-          setModalName={setModalName}
-          setIsBoxOpen={setIsBoxOpen}
-          llmSummary={summary}
-          downloadCSV={downloadCSV}
-          newSessionId={newSessionId}
-          oldSessionMetaInfo={oldSessionMetaInfo}
-          handleNewSession={handleNewSession}
-        />
+        {/* 
+        <ResizableBox
+          axis="y"
+          width={width_R}
+          onResize={onResize_R}
+          minConstraints={[280, Infinity]}
+          maxConstraints={[550, Infinity]}
+          resizeHandles={['n']}
+        >
+          <PreviewPaneSql height={height} initialSqlString={aiGeneratedSql} />
 
-        {/* Loader full screen */}
-        {loading && (
-          <>
-            {/* <FullPageBackground> */}
-            <Backdrop
-              open={!!loading}
-              sx={{
-                zIndex: 1300,
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                width: '100vw',
-                height: '100vh',
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <>
-                <CircularProgress sx={{ color: '#FFFFFF' }} />
-                <Typography sx={{ fontWeight: '600', fontSize: '20px', color: '#FFFFFF' }}>
-                  Prepping your data output...
-                </Typography>
-              </>
-            </Backdrop>
-          </>
-        )}
-
-        {/* Saved Session Dailog */}
-        {openSavedSessionDialog && (
-          <SavedSession
-            open={openSavedSessionDialog}
-            onClose={handleCloseSavedSession}
-            handleEditSession={handleEditSession}
-          />
-        )}
-        {openDisclaimer && (
-          <Disclaimer open={openDisclaimer} setIsOpen={setOpenDisclaimer} isOrgPrefernce={false} />
-        )}
-
-        {openDeactivateMsg && (
-          <DeactivatedMsg
-            open={openDeactivateMsg}
-            setIsOpen={setOpenDeactivateMsg}
-            enable_llm_requested={userpreferences?.enable_llm_requested}
-          />
-        )}
-        {isBoxOpen && (
-          <OverWriteDialog
-            open={isBoxOpen}
-            setIsBoxOpen={setIsBoxOpen}
-            modalName={modalName}
-            onSubmit={onSubmit}
-            submitFeedback={submitFeedback}
-            onConfirmNavigation={onConfirmNavigation}
-            handleNewSession={handleNewSession}
-            setModalName={setModalName}
-            oldSessionMetaInfo={oldSessionMetaInfo}
-            handleEditSession={handleEditSession}
-            selectedSession={selectedSession}
-          />
-        )}
-      </Box>
+        </ResizableBox> */}
+        {/* <ResizableBox
+          axis="y"
+          resizeHandles={['n']}
+          width={Infinity}
+          height={300}
+          onResize={onResize}
+          minConstraints={[Infinity, 100]}
+        > */}
+        <PreviewPaneSql height={100} initialSqlString={aiGeneratedSql} />
+        {/* <PreviewPaneSql height={300} initialSqlString={aiGeneratedSql} /> */}
+        {/* </ResizableBox> */}
+      </Dialog>
     </>
   );
 }
-
-const customCss = {
-  display: 'flex',
-  boxShadow: '0 4px 8px rgba(9, 37, 64, 0.08)',
-  backgroundColor: '#FFFFFF',
-  borderRadius: '12px',
-  padding: '2rem',
-  //   borderColor: '#FFFFFF',
-};

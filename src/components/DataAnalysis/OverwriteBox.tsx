@@ -3,7 +3,7 @@ import { Box, Button, TextField, Typography, DialogActions } from '@mui/material
 import CustomDialog from '../Dialog/CustomDialog';
 import { useForm, Controller } from 'react-hook-form';
 import { useTracking } from '@/contexts/TrackingContext';
-import { MODALS } from '@/pages/analysis/data-analysis';
+import { MODALS } from '@/pages/analysis/data-analysis_old';
 // Define the form data type
 interface FormData {
   sessionName: string;

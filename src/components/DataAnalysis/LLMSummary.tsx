@@ -9,7 +9,7 @@ import { successToast, errorToast } from '../ToastMessage/ToastHelper';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ContentCopy, ThumbDownAltOutlined } from '@mui/icons-material';
-import { MODALS } from '@/pages/analysis/data-analysis';
+import { MODALS } from '@/pages/analysis/data-analysis_old';
 import { useTracking } from '@/contexts/TrackingContext';
 
 export const LLMSummary = ({
