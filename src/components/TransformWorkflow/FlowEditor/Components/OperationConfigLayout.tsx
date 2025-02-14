@@ -37,7 +37,9 @@ import {
   UNPIVOT_OP,
   GENERIC_COL_OP,
   GENERIC_SQL_OP,
+  AI_ASSISTANT,
 } from '../constant';
+import AIAssistantOpForm from './OperationPanel/Forms/AIAssistantOpForm';
 import RenameColumnOpForm from './OperationPanel/Forms/RenameColumnOpForm';
 import CastColumnOpForm from './OperationPanel/Forms/CastColumnOpForm';
 import DropColumnOpForm from './OperationPanel/Forms/DropColumnOpForm';
@@ -101,6 +103,7 @@ const operationComponentMapping: any = {
   [UNPIVOT_OP]: UnpivotOpForm,
   [GENERIC_COL_OP]: GenericColumnOpForm,
   [GENERIC_SQL_OP]: GenericSqlOpForm,
+  [AI_ASSISTANT]: AIAssistantOpForm,
 };
 
 const OperationForm = memo(

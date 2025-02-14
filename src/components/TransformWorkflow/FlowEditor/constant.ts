@@ -2,6 +2,7 @@ import renameIcon from '@/assets/icons/UI4T/rename.svg';
 import flattenJsonIcon from '@/assets/icons/UI4T/flatten.svg';
 import castDataTypesIcon from '@/assets/icons/UI4T/cast.svg';
 import coalesceColumnsIcon from '@/assets/icons/UI4T/coalesce.svg';
+import insightsIcon from '@/assets/icons/UI4T/aiassistant.svg';
 import arithmeticIcon from '@/assets/icons/UI4T/arithmetic.svg';
 import concatIcon from '@/assets/icons/UI4T/concat.svg';
 import dropColumnsIcon from '@/assets/icons/UI4T/drop.svg';
@@ -20,6 +21,7 @@ export const RENAME_COLUMNS_OP = 'renamecolumns';
 export const FLATTEN_OP = 'flatten';
 export const FLATTEN_JSON_OP = 'flattenjson';
 export const CAST_DATA_TYPES_OP = 'castdatatypes';
+export const AI_ASSISTANT = 'aiassistant';
 export const COALESCE_COLUMNS_OP = 'coalescecolumns';
 export const ARITHMETIC_OP = 'arithmetic';
 export const CONCAT_COLUMNS_OP = 'concat';
@@ -58,9 +60,15 @@ export const operationIconMapping = {
   [UNPIVOT_OP]: unpivotIcon,
   [GENERIC_COL_OP]: genericIcon,
   [GENERIC_SQL_OP]: genericIcon,
+  [AI_ASSISTANT]: insightsIcon,
 };
 
 export const operations = [
+  {
+    label: 'AI assistant',
+    slug: AI_ASSISTANT,
+    infoToolTip: 'Query in natural language to generate flow nodes',
+  },
   {
     label: 'Flatten JSON',
     slug: FLATTEN_JSON_OP,
