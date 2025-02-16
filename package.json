@@ -23,7 +23,7 @@
     "@mui/icons-material": "5.16.13",
     "@mui/material": "^5.16.13",
     "@mui/x-date-pickers": "^6.20.1",
-    "@sentry/nextjs": "8.47.0",
+    "@sentry/nextjs": "8.51.0",
     "@superset-ui/embedded-sdk": "^0.1.2",
     "@tanstack/react-table": "^8.20.5",
     "@types/d3": "^7.4.2",
